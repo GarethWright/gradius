@@ -1,0 +1,12 @@
+{
+  "name": "gradius-star-command",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "check": "node --check public/game.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run"
+  },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}
