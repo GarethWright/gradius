@@ -10,3 +10,17 @@
 .console, .touch, .console button, .touch button {
   touch-action: none;
 }
+/* Deep-space cockpit */
+:root{--bg:#03070e;--cyan:#75e9ff;--orange:#ff805c}
+body{background:radial-gradient(ellipse at 65% 0,#122539,#03070e 70%)}
+main{max-width:1480px;padding:24px 32px}
+header{margin-bottom:20px}.console{background:#08121b;border-color:#294150;box-shadow:0 30px 120px #000a}
+.telemetry{background:linear-gradient(100deg,#0b1b29,#071019);padding:15px 24px}.telemetry strong{color:#d9f6ff}.record strong{color:var(--orange)}
+.screen:after{background:radial-gradient(ellipse at center,transparent 45%,#01040c70 100%);opacity:1}.screen{background:#020611}
+#overlay{align-items:flex-end;padding-right:8%;background:linear-gradient(90deg,transparent 20%,#02081388 75%);text-align:right}
+h1{font-size:clamp(64px,9vw,138px);letter-spacing:7px;text-shadow:0 0 60px #52d8ff22;font-style:normal;background:linear-gradient(165deg,#fff 20%,#b7e2f5 55%,#6396b5);background-clip:text;-webkit-background-clip:text;color:transparent}
+#subtitle{color:#8dcbe6;letter-spacing:9px}#description{max-width:350px}.primary{background:#b0f0ff;border:1px solid #d4fbff;box-shadow:0 0 35px #65d9ff20;color:#092433}.primary:hover{background:#e0faff}.eyebrow{color:var(--orange)}
+.power{background:#07111b;padding:16px 20px}.slot{background:#0c1b29;border-color:#213b4c}.slot.selected{background:#b0f0ff;border-color:#b0f0ff;color:#092433}.slot.equipped{border-bottom-color:#74e4ff}.statusline{background:#050d15}.hint{color:#a4bccb}
+#toast{font-size:clamp(10px,1.7vw,18px);top:18%;letter-spacing:2px}#bossbar{top:17px}.credit{margin-top:23px}
+@media(max-width:800px){main{padding:12px}.screen{min-height:0}#overlay{padding:15px 6%}h1{font-size:clamp(42px,11vw,75px);letter-spacing:3px}.eyebrow{font-size:8px;letter-spacing:2px}#description{font-size:10px;margin:3px 0 10px}#subtitle{font-size:10px;letter-spacing:4px;margin:6px 0}.hint{font-size:8px}.power{padding:9px 7px}.telemetry{padding:10px 13px}.touch{padding:0 4px}.actions .fire{background:radial-gradient(circle,#15374a,#091522);border-color:#88eaff;color:#b0f0ff}.primary{padding:10px 12px;font-size:10px}}
+@media(max-height:550px) and (orientation:landscape){main{padding:6px 12px;max-width:none}.telemetry{background:none;padding:5px 12px}.screen{height:calc(100dvh - 68px)}.power{padding:4px}.touch{bottom:70px}#overlay{padding-right:12%}.console:has(.screen:fullscreen) .touch{bottom:12px}}
