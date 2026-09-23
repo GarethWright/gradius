@@ -19,4 +19,15 @@ const g={state:'play',player:{x:130,y:270,inv:0,shield:3,options:4},history:Arra
 for(const state of ['title','play','paused','over','win'])for(let stage=0;stage<7;stage++){g.state=state;g.stage=stage;render.render(g,1/60);}
 let objects=0;inspection.capturedScene.traverse(o=>{objects++;assert(o.matrixWorld.elements.every(Number.isFinite),o.type+' invalid transform');if(o.geometry?.attributes.position)assert([...o.geometry.attributes.position.array].every(Number.isFinite),'invalid geometry')});
 assert(objects>100);assert.equal(inspection.capturedCamera.projectionMatrix.elements[0],1.875);
+// Every visible cliff edge must remain on the gameplay collision plane.
+for(const [name,edge,sign] of [['floor-rock',40,-1],['ceiling-rock',500,1]]){
+ const wall=inspection.capturedScene.getObjectByName(name);
+ assert(wall && !wall.material.transparent);
+ const a=wall.geometry.attributes.position;
+ for(let i=0;i<a.count;i++){
+  const projectedY=270+(a.getY(i)-270)*900/(900-a.getZ(i));
+  assert(sign*(projectedY-edge)>=-1e-5,'rock protrudes into flight corridor');
+  if(i%10===0){assert.equal(a.getY(i),edge);assert.equal(a.getZ(i),0);}
+ }
+}
 render.dispose();console.log('PASS: Three.js scene construction, all entity types, all seven palettes and five game states, finite geometry/transforms, camera plane alignment, disposal. GPU shader execution not tested.');

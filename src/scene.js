@@ -72,9 +72,48 @@ export function createSpaceRenderer(canvas) {
     float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
     float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);}
     void main(){vec2 p=uvv*5.+vec2(clock*.004,0.);float f=0.,a=.5;for(int i=0;i<5;i++){f+=a*noise(p);p=p*2.03+1.;a*=.5;}float band=exp(-pow((uvv.y-.5+sin(uvv.x*5.)*.13)*3.,2.));gl_FragColor=vec4(tint*f*band*.8+vec3(.002,.004,.011),1.);}`}),scene,[480,270,-2100]);
-  // Continuous rock ribbons put the visible collision edge exactly at z=0.
-  const terrainMaterial=mat('#16283d',.35,.8),edgeMaterial=glow('#ff7350',1.1),ribbons=[];
-  for(const top of [true,false]){const count=81,pos=new Float32Array(count*4*3),indices=[];for(let i=0;i<count-1;i++){const k=i*4;indices.push(k,k+4,k+1,k+1,k+4,k+5,k+1,k+5,k+2,k+2,k+5,k+6,k+2,k+6,k+3,k+3,k+6,k+7);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3).setUsage(THREE.DynamicDrawUsage));geo.setIndex(indices);const rock=mesh(geo,terrainMaterial,scene);rock.frustumCulled=false;rock.material.side=THREE.DoubleSide;const edgeGeo=new THREE.BufferGeometry();edgeGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(count*3),3).setUsage(THREE.DynamicDrawUsage));const edge=new THREE.Line(edgeGeo,new THREE.LineBasicMaterial({color:0xffa573}));scene.add(edge);ribbons.push({top,geo,edge,count});}
+  // Opaque faceted cliff faces, rather than thin luminous ribbons.
+  const terrainMaterial=new THREE.MeshStandardMaterial({color:'#817369',metalness:0,roughness:1,flatShading:true,side:THREE.DoubleSide});
+  const rockScroll={value:0};
+  terrainMaterial.onBeforeCompile=shader=>{
+    shader.uniforms.rockScroll=rockScroll;
+    shader.vertexShader='varying vec3 vStone;\n'+shader.vertexShader;
+    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvStone=position;');
+    shader.fragmentShader=`varying vec3 vStone;
+      uniform float rockScroll;
+      float stoneHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float stoneNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(stoneHash(i),stoneHash(i+vec2(1.,0.)),f.x),mix(stoneHash(i+vec2(0.,1.)),stoneHash(i+1.),f.x),f.y);}
+      float stoneCracks(vec2 p){vec2 cell=floor(p),f=fract(p);float first=9.,second=9.;
+        for(int y=-1;y<=1;y++){for(int x=-1;x<=1;x++){vec2 offset=vec2(float(x),float(y));vec2 seed=vec2(stoneHash(cell+offset),stoneHash(cell+offset+19.3));vec2 delta=offset+seed-f;float d=dot(delta,delta);if(d<first){second=first;first=d;}else{second=min(second,d);}}}
+        return smoothstep(.008,.095,second-first);
+      }
+    `+shader.fragmentShader;
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      vec2 stoneUV=vec2(vStone.x+rockScroll,vStone.y)*.033;
+      float grain=stoneNoise(stoneUV*7.);
+      float strata=stoneNoise(vec2(stoneUV.x*.45,stoneUV.y*3.5));
+      float fracture=stoneCracks(stoneUV+vec2(stoneNoise(stoneUV*.8))*.7);
+      float stoneShade=(.46+.32*strata+.22*grain)*mix(.22,1.,fracture);
+      diffuseColor.rgb*=stoneShade;
+    `);
+  };
+  terrainMaterial.customProgramCacheKey=()=> 'opaque-fractured-rock-v1';
+  const ribbons=[];
+  for(const top of [true,false]){
+    const count=81,rows=10,indices=[];
+    for(let i=0;i<count-1;i++)for(let j=0;j<rows-1;j++){
+      const k=i*rows+j,n=k+rows;
+      // Alternating diagonals keep the rock facets from forming long stripes.
+      if((i+j)%2)indices.push(k,n,k+1,k+1,n,n+1);
+      else indices.push(k,n,n+1,k,n+1,k+1);
+    }
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(count*rows*3),3).setUsage(THREE.DynamicDrawUsage));
+    geo.setIndex(indices);
+    const rock=mesh(geo,terrainMaterial,scene);rock.frustumCulled=false;
+    rock.name=top?'ceiling-rock':'floor-rock';
+    ribbons.push({top,geo,count,rows});
+  }
   const rocks=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,0),terrainMaterial,60);rocks.frustumCulled=false;scene.add(rocks);
   const rockSeeds=Array.from({length:60},()=>({x:Math.random()*1700,y:Math.random(),z:-100-Math.random()*450,s:16+Math.random()*40,r:Math.random()*6}));
   let clock=0,previousStage=-1,lastY=270,disposed=false;
@@ -83,7 +122,7 @@ export function createSpaceRenderer(canvas) {
     camera.aspect=width/height;camera.updateProjectionMatrix();camera.projectionMatrix.elements[0]=2*900/960;camera.projectionMatrix.elements[5]=2*900/540;camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}
   const observer=new ResizeObserver(resize);observer.observe(canvas);resize();
   function render(g,dt){if(disposed)return;if(g.state!=='paused')clock+=dt;
-    if(g.stage!==previousStage){previousStage=g.stage;bossAccent.color.set(g.colors[g.stage]);bossAccent.emissive.set(g.colors[g.stage]);rim.color.set(g.colors[g.stage]);edgeMaterial.color.set(g.colors[g.stage]);nebula.material.uniforms.tint.value.set(g.colors[g.stage]).multiplyScalar(.32);planet.material.color.set(g.colors[g.stage]).multiplyScalar(.3);for(const r of ribbons)r.edge.material.color.set(g.colors[g.stage]);}
+    if(g.stage!==previousStage){previousStage=g.stage;bossAccent.color.set(g.colors[g.stage]);bossAccent.emissive.set(g.colors[g.stage]);rim.color.set(g.colors[g.stage]);nebula.material.uniforms.tint.value.set(g.colors[g.stage]).multiplyScalar(.32);planet.material.color.set(g.colors[g.stage]).multiplyScalar(.3);}
     nebula.material.uniforms.clock.value=clock;planet.rotation.y=clock*.025;atmosphere.rotation.y=planet.rotation.y;
     if(g.state!=='paused')for(let layer=0;layer<starLayers.length;layer++){const a=starLayers[layer].geometry.attributes.position;for(let i=0;i<a.count;i++){a.array[i*3]-=dt*(g.state==='play'?55:13)/(layer+1);if(a.array[i*3]<-1000)a.array[i*3]=2000;}a.needsUpdate=true;}
     const title=g.state==='title',px=title?260:g.player.x,py=title?285+Math.sin(clock*.6)*15:g.player.y;
@@ -99,8 +138,31 @@ export function createSpaceRenderer(canvas) {
     instances(sparkMesh,g.particles,(d,p,i)=>{d.position.set(p.x,540-p.y,Math.sin(i*13)*Math.max(0,.7-p.life)*65);d.scale.setScalar(Math.max(.1,p.life*5));color.set(p.color);sparkMesh.setColorAt(i,color)});if(sparkMesh.instanceColor)sparkMesh.instanceColor.needsUpdate=true;
     bossRoot.visible=!!g.boss;if(g.boss){bossRoot.position.set(g.boss.x,540-g.boss.y,0);rotor.rotation.z=g.boss.t*.18;core.rotation.y=g.boss.t*2;coreRing.rotation.y=Math.sin(g.boss.t)*.3;backRing.rotation.x=g.boss.t*.1;}
     const scroll=title?clock*22:g.world;
-    for(const r of ribbons){const a=r.geo.attributes.position,e=r.edge.geometry.attributes.position;for(let i=0;i<r.count;i++){const x=i*12,y=r.top?540-g.terrain(x,true):g.terrain(x);const outside=r.top?720:-180;const vertices=[[x,y,0],[x,y+(r.top?25:-25),-45],[x,outside,-160],[x,outside,20]];for(let j=0;j<4;j++)a.setXYZ(i*4+j,...vertices[j]);e.setXYZ(i,x,y,1);}a.needsUpdate=true;e.needsUpdate=true;r.geo.computeVertexNormals();}
-    for(let i=0;i<rockSeeds.length;i++){const r=rockSeeds[i],x=((r.x-scroll*.65)%1700+1700)%1700-350;dummy.position.set(x,i%2?500+r.y*160:-r.y*160,r.z);dummy.rotation.set(r.r,clock*.025+r.r,r.r);dummy.scale.set(r.s*1.6,r.s,r.s);dummy.updateMatrix();rocks.setMatrixAt(i,dummy.matrix);}rocks.instanceMatrix.needsUpdate=true;
+    rockScroll.value=g.world;
+    for(const r of ribbons){
+      const a=r.geo.attributes.position,sign=r.top?1:-1;
+      for(let i=0;i<r.count;i++){
+        const x=i*12,edge=r.top?540-g.terrain(x,true):g.terrain(x);
+        for(let j=0;j<r.rows;j++){
+          const w=x+g.world;
+          const jag=Math.sin(w*.079+j*2.7)*Math.sin(w*.037-j*1.4);
+          // The first row stays exactly on the collision boundary at z=0.
+          const outward=j===0?0:j*32+jag*9;
+          const depth=j===0?0:-8-(.5+.5*Math.sin(w*.064+j*2.2))*24;
+          a.setXYZ(i*r.rows+j,x,edge+sign*outward,depth);
+        }
+      }
+      a.needsUpdate=true;r.geo.computeVertexNormals();
+    }
+    for(let i=0;i<rockSeeds.length;i++){
+      const r=rockSeeds[i],x=((r.x-scroll)%1700+1700)%1700-350,top=i%2===1;
+      const edge=top?540-g.terrain(x,true):g.terrain(x);
+      // Embedded boulders remain outside the playable corridor.
+      dummy.position.set(x,edge+(top?1:-1)*(r.s*1.65+24+r.y*60),-18-r.s*.4);
+      dummy.rotation.set(r.r,r.r*.7,r.r);dummy.scale.set(r.s*1.6,r.s,r.s*.65);
+      dummy.updateMatrix();rocks.setMatrixAt(i,dummy.matrix);
+    }
+    rocks.instanceMatrix.needsUpdate=true;
     // Small camera recoil adds impact without moving the collision plane significantly.
     camera.position.x=480+(Math.random()-.5)*g.shake*.25;camera.position.y=270+(Math.random()-.5)*g.shake*.25;
     bloom.strength=g.boss?.85:.65;composer.render(dt);
